@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Medical Image Analyzer</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .card-custom {
+            transition: all 0.3s ease;
+            border: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .card-custom:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+
+        .btn-upload {
+            background-color: #6366f1;
+            color: white;
+        }
+
+        .btn-upload:hover {
+            background-color: #4f46e5;
+        }
+
+        .btn-submit {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .btn-submit:hover {
+            background-color: #059669;
+        }
+
+        #image-container img {
+            max-height: 300px;
+            object-fit: cover;
+        }
+
+        .response-container {
+            background-color: #f3f4f6;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <div class="d-flex justify-content-center align-items-center mb-3">
+                <div class="bg-white rounded-circle shadow-sm p-3 me-3">
+                    <i class="fas fa-camera text-primary" style="font-size: 2rem;"></i>
+                </div>
+                <h1 class="display-6 fw-bold text-primary">AI Medical Image Analyzer</h1>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Upload Image Card -->
+            <div class="col-md-6">
+                <div class="card card-custom h-100">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary mb-4">Upload Image</h5>
+                        <button id="upload-btn" class="btn btn-upload w-100 py-2 mb-3">
+                            Upload Image
+                        </button>
+                        
+                        <input type="file" id="image-upload" accept="image/*" class="d-none">
+                        
+                        <div id="image-container" class="d-none mt-3 text-center">
+                            <img id="display-image" src="" alt="Uploaded image" class="img-fluid rounded shadow-sm">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ask Question Card -->
+            <div class="col-md-6">
+                <div class="card card-custom h-100">
+                    <div class="card-body">
+                        <h5 class="card-title text-success mb-4">Ask Question</h5>
+                        <textarea id="query-input" rows="4" placeholder="Enter your question about the image" 
+                            class="form-control mb-3"></textarea>
+                        <button id="submit-query" class="btn btn-submit w-100">
+                            Submit Query
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-3">
+            <!-- Llama Response Cards -->
+            <div class="col-md-6">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title text-info">Llama-3.2-11b-vision Response</h5>
+                        <div id="response-container-llama11b" class="response-container d-none p-3 mt-3">
+                            <!-- Response will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title text-info">Llama-3.2-90b-vision Response</h5>
+                        <div id="response-container-llama90b" class="response-container d-none p-3 mt-3">
+                            <!-- Response will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Container -->
+        <div id="error-container" class="alert alert-danger mt-4 d-none">
+            <p id="error-text" class="mb-0"></p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Marked for markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadBtn = document.getElementById('upload-btn');
+            const imageUpload = document.getElementById('image-upload');
+            const displayImage = document.getElementById('display-image');
+            const imageContainer = document.getElementById('image-container');
+            const queryInput = document.getElementById('query-input');
+            const submitQuery = document.getElementById('submit-query');
+            const responseLlama = document.getElementById('response-container-llama11b');
+            const responseLlava = document.getElementById('response-container-llama90b');
+            const errorContainer = document.getElementById('error-container');
+            const errorText = document.getElementById('error-text');
+
+            // Click to Upload button trigger
+            uploadBtn.addEventListener('click', () => {
+                imageUpload.click();
+            });
+
+            // Display uploaded image
+            imageUpload.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        displayImage.src = e.target.result;
+                        imageContainer.classList.remove('d-none');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Submit Query
+            submitQuery.addEventListener('click', async () => {
+                const image = imageUpload.files[0];
+                const query = queryInput.value;
+
+                if (!image || !query) {
+                    showError('Please upload an image and enter a query.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('image', image);
+                formData.append('query', query);
+
+                try {
+                    submitQuery.disabled = true;
+                    submitQuery.textContent = 'Processing...';
+
+                    const response = await fetch('/upload_and_query', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.detail || 'An error occurred while processing your request.');
+                    }
+
+                    responseLlama.innerHTML = marked.parse(result.llama);
+                    responseLlama.classList.remove('d-none');
+                    responseLlava.innerHTML = marked.parse(result.llava);
+                    responseLlava.classList.remove('d-none');
+                    errorContainer.classList.add('d-none');
+                } catch (error) {
+                    console.error('Error:', error);
+                    showError(error.message);
+                } finally {
+                    submitQuery.disabled = false;
+                    submitQuery.textContent = 'Submit Query';
+                }
+            });
+
+            function showError(message) {
+                errorText.textContent = message;
+                errorContainer.classList.remove('d-none');
+                responseLlama.classList.add('d-none');
+                responseLlava.classList.add('d-none');
+            }
+        });
+    </script>
+</body>
+</html>
